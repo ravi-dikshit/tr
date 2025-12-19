@@ -60,12 +60,22 @@
         }
       } while (nextPageToken && items.length < 1000);
       
-      allEpisodes = items.map((item, i) => ({
-        index: i, 
-        title: item.snippet.title, 
-        vid: item.snippet.resourceId.videoId,
-        thumb: item.snippet.thumbnails.medium.url
-      }));
+     allEpisodes = items.map((item, i) => {
+        const thumbs = item.snippet.thumbnails || {};
+        const thumbUrl =
+          (thumbs.medium && thumbs.medium.url) ||
+          (thumbs.high && thumbs.high.url) ||
+          (thumbs.default && thumbs.default.url) ||
+          '';
+      
+        return {
+          index: i,
+          title: item.snippet.title,
+          vid: item.snippet.resourceId.videoId,
+          thumb: thumbUrl
+        };
+      });
+
       console.log(`Loaded ${allEpisodes.length} episodes`);
     }
 
@@ -133,3 +143,4 @@
   </script>
 </body>
 </html>
+

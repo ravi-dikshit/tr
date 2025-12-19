@@ -1,11 +1,10 @@
-
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>Tenali Rama – Playlist Browser</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <link rel="icon" type="" href="Tenali-Ramakrishna.png">
+  <link rel="icon" type="image/png" href="Tenali-Ramakrishna.png">
   <style>
     :root {
       --bg:#121212;
@@ -124,23 +123,31 @@
 
     .now-playing {
       display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
+      flex-direction:column;
+      gap:8px;
       margin-bottom:10px;
-      font-size:17px; /* bigger */
     }
     .now-title {
-      flex:1;
       font-weight:700;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      white-space:nowrap;
+      font-size:27px; /* +10px increase */
+      line-height:1.2;
+    }
+    .episode-main {
+      font-weight:700;
+      display:block;
+    }
+    .episode-date {
+      font-weight:300;
+      opacity:0.8;
+      font-size:0.85em;
+      margin-top:2px;
+      display:block;
     }
     .nav-buttons {
       display:flex;
       gap:8px;
       flex-shrink:0;
+      margin-top:auto;
     }
     .nav-buttons button {
       padding:6px 12px;
@@ -151,6 +158,7 @@
       color:var(--fg);
       cursor:pointer;
       min-width:70px;
+      flex:1;
     }
     .nav-buttons button:disabled {
       opacity:.4;
@@ -265,6 +273,13 @@
       margin-right:10px;
       background:#000;
     }
+    .thumb.lazy {
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+    .thumb.loaded {
+      opacity: 1;
+    }
     .meta { flex:1; min-width:0; }
     .title {
       margin:0 0 4px;
@@ -307,6 +322,12 @@
       #player {
         height:40vh;
       }
+      .now-playing {
+        gap:12px;
+      }
+      .now-title {
+        font-size:24px;
+      }
     }
   </style>
 </head>
@@ -314,7 +335,7 @@
   <header>
     <img src="Tenali-Ramakrishna.png" alt="Tenali Rama" class="logo">
     <div class="title-block">
-      <h1>Tenali Rama – Playlist Browser - Version 2.9</h1>
+      <h1>Tenali Rama – Playlist Browser - Version 3.1</h1>
       <div class="top-row">
         <input id="search" placeholder="Search by number or title..." />
         <button id="clearBtn">Clear</button>
@@ -371,9 +392,30 @@
     let player = null;
     let currentIndex = -1;
 
+    // 1x1 transparent placeholder
+    const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(tag);
+
+    function setupLazyLoading() {
+      if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              const img = entry.target;
+              img.src = img.dataset.src;
+              img.classList.remove('lazy');
+              img.classList.add('loaded');
+              observer.unobserve(img);
+            }
+          });
+        }, { rootMargin: '200px 0px' });
+        
+        document.querySelectorAll('.thumb[data-src]').forEach(img => observer.observe(img));
+      }
+    }
 
     function onYouTubeIframeAPIReady() {
       player = new YT.Player('player', {
@@ -504,16 +546,26 @@
         row.onclick = () => playEpisode(ep.index);
         if (ep.index === currentIndex) row.classList.add('active');
 
-        row.innerHTML = `
-          <img class="thumb" src="${ep.thumb}" alt="${ep.title}" loading="lazy">
-          <div class="meta">
-            <p class="title">${ep.title}</p>
-            <p class="num">Episode ${ep.index + 1}</p>
-          </div>
+        const img = document.createElement('img');
+        img.className = 'thumb lazy';
+        img.dataset.src = ep.thumb;
+        img.src = PLACEHOLDER;
+        img.alt = ep.title;
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = `
+          <p class="title">${ep.title}</p>
+          <p class="num">Episode ${ep.index + 1}</p>
         `;
+
+        row.appendChild(img);
+        row.appendChild(meta);
         list.appendChild(row);
       });
 
+      setupLazyLoading();
+      
       const active = list.querySelector('.item.active');
       if (active) {
         const wrapper = document.getElementById('listWrapper');
@@ -529,14 +581,26 @@
       const nextBtn = document.getElementById('nextBtn');
 
       if (currentIndex < 0 || !allEpisodes[currentIndex]) {
-        tEl.textContent = 'Select an episode…';
+        tEl.innerHTML = 'Select an episode…';
         prevBtn.disabled = true;
         nextBtn.disabled = true;
         return;
       }
 
       const ep = allEpisodes[currentIndex];
-      tEl.textContent = `Ep ${ep.index + 1}: ${ep.title}`;
+      const fullTitle = ep.title;
+      const epNum = `Ep ${ep.index + 1}: `;
+      
+      // Extract date from typical format "Tenali Rama - Ep 116 - Full Episode - 15th December, 2017"
+      const dateMatch = fullTitle.match(/(\d{1,2}(st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December),\s+\d{4})/i);
+      const date = dateMatch ? dateMatch[0] : '';
+      const mainTitle = date ? fullTitle.replace(epNum, '').replace(` - Full Episode - ${date}`, '').trim() : fullTitle.replace(epNum, '').trim();
+      
+      tEl.innerHTML = `
+        <span class="episode-main">${epNum}${mainTitle}</span>
+        <span class="episode-date">${date}</span>
+      `;
+      
       prevBtn.disabled = (currentIndex <= 0);
       nextBtn.disabled = (currentIndex >= allEpisodes.length - 1);
     }
@@ -573,6 +637,7 @@
       if (targetIdx == null || isNaN(targetIdx)) {
         return { start:0, end:Math.min(INITIAL_BATCH, total) };
       }
+      // Priority window around saved position (e.g., episode 116 area)
       const start = Math.max(targetIdx - 10, 0);
       const end   = Math.min(start + INITIAL_BATCH, total);
       return { start, end };
@@ -620,19 +685,15 @@
 
       // Background: progressively add remaining episodes in chunks
       (async () => {
-        const remaining = [];
-        for (let i = 0; i < allEpisodes.length; i++) {
-          if (i < win.start || i >= win.end) remaining.push(allEpisodes[i]);
-        }
-        while (remaining.length) {
-          const chunk = remaining.splice(0, CHUNK_SIZE);
-          allEpisodes = allEpisodes; // unchanged reference
-          // no need to re-filter if search empty; just extend filtered by range
+        let chunkStart = Math.max(win.end, INITIAL_BATCH);
+        while (chunkStart < allEpisodes.length) {
+          const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, allEpisodes.length);
           const rangeIdx = Number(rangeSel.value || 0);
           const s = rangeIdx * RANGE_SIZE;
           const e = s + RANGE_SIZE;
           filteredEpisodes = allEpisodes.filter(ep => ep.index >= s && ep.index < e);
           renderList();
+          chunkStart = chunkEnd;
           await new Promise(r => setTimeout(r, 50));
         }
       })();
@@ -655,7 +716,6 @@
           }
         }
       });
-
 
       document.getElementById('clearBtn').addEventListener('click', () => {
         searchEl.value = '';
@@ -681,7 +741,3 @@
   </script>
 </body>
 </html>
-
-
-
-

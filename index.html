@@ -8,8 +8,8 @@
 
   <!-- Optional: PWA manifest + icon -->
   <!-- If you don't have these files yet, you can remove these two lines. -->
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icon-192.png">
+  <!-- <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png"> -->
 
   <style>
     :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
@@ -93,7 +93,7 @@
         const json = await res.json();
 
         for (const item of json.items || []) {
-          const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId; [web:25][web:36]
+          const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
           if (!vid) continue;
           out.push({
             videoId: vid,
@@ -259,3 +259,4 @@
   </script>
 </body>
 </html>
+

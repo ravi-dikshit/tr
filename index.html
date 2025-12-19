@@ -60,21 +60,27 @@
         }
       } while (nextPageToken && items.length < 1000);
       
-     allEpisodes = items.map((item, i) => {
-        const thumbs = item.snippet.thumbnails || {};
-        const thumbUrl =
-          (thumbs.medium && thumbs.medium.url) ||
-          (thumbs.high && thumbs.high.url) ||
-          (thumbs.default && thumbs.default.url) ||
-          '';
-      
-        return {
-          index: i,
-          title: item.snippet.title,
-          vid: item.snippet.resourceId.videoId,
-          thumb: thumbUrl
-        };
-      });
+allEpisodes = items.map((item, i) => {
+  const thumbs = item.snippet.thumbnails || {};
+  let thumbUrl =
+    (thumbs.medium && thumbs.medium.url) ||
+    (thumbs.high && thumbs.high.url) ||
+    (thumbs.default && thumbs.default.url) ||
+    '';
+
+  // Fallback: construct URL from videoId if API gave nothing
+  if (!thumbUrl && item.snippet.resourceId && item.snippet.resourceId.videoId) {
+    const vid = item.snippet.resourceId.videoId;
+    thumbUrl = `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+  }
+
+  return {
+    index: i,
+    title: item.snippet.title,
+    vid: item.snippet.resourceId.videoId,
+    thumb: thumbUrl
+  };
+});
 
       console.log(`Loaded ${allEpisodes.length} episodes`);
     }
@@ -143,4 +149,5 @@
   </script>
 </body>
 </html>
+
 

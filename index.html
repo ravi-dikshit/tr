@@ -56,7 +56,7 @@
     .main {
       flex:1;
       display:flex;
-      min-height:0; /* allow children to scroll */
+      min-height:0;
     }
     .left {
       flex:3;
@@ -75,9 +75,11 @@
       max-width:420px;
     }
 
+    /* Taller video: 65% of viewport height approx */
     #player {
       width:100%;
-      aspect-ratio:16/9;
+      height:65vh;
+      max-height:720px;
       margin-bottom:8px;
     }
 
@@ -136,6 +138,16 @@
       margin-bottom:8px;
       font-size:13px;
     }
+    .resume-toggle {
+      display:flex;
+      align-items:center;
+      gap:4px;
+      font-size:12px;
+    }
+    #resumeToggle {
+      accent-color:var(--accent);
+      cursor:pointer;
+    }
     #rangeSelect {
       padding:4px 6px;
       font-size:13px;
@@ -183,10 +195,7 @@
       margin-right:8px;
       background:#000;
     }
-    .meta {
-      flex:1;
-      min-width:0;
-    }
+    .meta { flex:1; min-width:0; }
     .title {
       margin:0 0 4px;
       font-size:14px;
@@ -216,12 +225,15 @@
         border-top:1px solid #262626;
         padding-left:16px;
       }
+      #player {
+        height:40vh;
+      }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Tenali Rama – Playlist Browser - Version 2.1</h1>
+    <h1>Tenali Rama – Playlist Browser - version 2.2</h1>
     <div class="top-row">
       <input id="search" placeholder="Search by number or title..." />
       <button id="clearBtn">Clear</button>
@@ -233,7 +245,7 @@
       <div id="player"></div>
       <div id="err"></div>
       <div class="now-playing">
-        <div class="now-title" id="nowTitle">Select an episode…</div>
+        <div class="now-title" id="nowTitle">Loading first episode…</div>
         <div class="nav-buttons">
           <button id="prevBtn">Previous</button>
           <button id="nextBtn">Next</button>
@@ -243,7 +255,10 @@
 
     <aside class="right">
       <div class="right-top">
-        <span>Episodes</span>
+        <div class="resume-toggle">
+          <input type="checkbox" id="resumeToggle" />
+          <label for="resumeToggle">Resume last episode</label>
+        </div>
         <select id="rangeSelect"></select>
       </div>
       <div id="listWrapper">
@@ -260,6 +275,7 @@
     const RANGE_SIZE  = 100;
     const LS_LAST_INDEX = 'tr_lastEpisodeIndex';
     const LS_LAST_RANGE = 'tr_lastRange';
+    const LS_RESUME_ON  = 'tr_resumeOn';
 
     let allEpisodes = [];
     let filteredEpisodes = [];
@@ -347,9 +363,27 @@
       }
     }
 
-    function applyFilters() {
+    function indexToRange(idx) {
+      return Math.floor(idx / RANGE_SIZE);
+    }
+
+    function applyFilters(adjustRangeForSearch = false) {
       const searchTerm = document.getElementById('search').value.toLowerCase().trim();
-      const rangeIdx = Number(document.getElementById('rangeSelect').value || 0);
+      const rangeSel = document.getElementById('rangeSelect');
+
+      // If searching a specific number, make sure dropdown covers that episode
+      if (adjustRangeForSearch && searchTerm && !isNaN(Number(searchTerm))) {
+        const num = Number(searchTerm);
+        if (num >= 1 && num <= allEpisodes.length) {
+          const desiredRange = indexToRange(num - 1);
+          if (Number(rangeSel.value) !== desiredRange) {
+            rangeSel.value = String(desiredRange);
+            localStorage.setItem(LS_LAST_RANGE, rangeSel.value);
+          }
+        }
+      }
+
+      const rangeIdx = Number(rangeSel.value || 0);
       const start = rangeIdx * RANGE_SIZE;
       const end   = start + RANGE_SIZE;
 
@@ -392,7 +426,6 @@
         list.appendChild(row);
       });
 
-      // Ensure active item is visible inside listWrapper
       const active = list.querySelector('.item.active');
       if (active) {
         const wrapper = document.getElementById('listWrapper');
@@ -422,14 +455,21 @@
       nextBtn.disabled = (currentIndex >= allEpisodes.length - 1);
     }
 
+    function saveLastIndexIfNeeded() {
+      const resumeOn = document.getElementById('resumeToggle').checked;
+      if (resumeOn && currentIndex >= 0) {
+        localStorage.setItem(LS_LAST_INDEX, String(currentIndex));
+      }
+    }
+
     function playEpisode(idx) {
       if (!player || !allEpisodes[idx]) return;
       currentIndex = idx;
 
       const vid = allEpisodes[idx].vid;
-      if (vid) player.loadVideoById(vid);  // autoplay; use cueVideoById if needed
+      if (vid) player.loadVideoById(vid);
 
-      localStorage.setItem(LS_LAST_INDEX, String(idx));
+      saveLastIndexIfNeeded();
       updateNowPlaying();
 
       document.querySelectorAll('.item').forEach(el =>
@@ -444,30 +484,52 @@
     }
 
     async function onPlayerReady() {
+      // Initialise toggle from storage
+      const resumeToggle = document.getElementById('resumeToggle');
+      resumeToggle.checked = localStorage.getItem(LS_RESUME_ON) === '1';
+      resumeToggle.addEventListener('change', () => {
+        localStorage.setItem(LS_RESUME_ON, resumeToggle.checked ? '1' : '0');
+        if (resumeToggle.checked && currentIndex >= 0) {
+          localStorage.setItem(LS_LAST_INDEX, String(currentIndex));
+        }
+      });
+
       allEpisodes = await fetchAllPlaylistItems();
       if (!allEpisodes.length) return;
 
       buildRangeOptions(allEpisodes.length);
-      applyFilters();
+      applyFilters(false);
 
-      const savedIdx = localStorage.getItem(LS_LAST_INDEX);
+      const resumeOn = resumeToggle.checked;
+      const savedIdx = resumeOn ? localStorage.getItem(LS_LAST_INDEX) : null;
+
       if (savedIdx !== null) {
         const idx = Number(savedIdx);
         if (!Number.isNaN(idx) && idx >= 0 && idx < allEpisodes.length) {
+          // Ensure dropdown covers this episode
+          const r = indexToRange(idx);
+          document.getElementById('rangeSelect').value = String(r);
+          localStorage.setItem(LS_LAST_RANGE, String(r));
+          applyFilters(false);
           playEpisode(idx);
+        } else {
+          playEpisode(0); // fallback to first
         }
       } else {
-        updateNowPlaying();
+        // Default: auto‑play first episode
+        playEpisode(0);
       }
 
-      document.getElementById('search').addEventListener('input', applyFilters);
+      document.getElementById('search').addEventListener('input', () => {
+        applyFilters(true); // allow search to shift range
+      });
       document.getElementById('clearBtn').addEventListener('click', () => {
         document.getElementById('search').value = '';
-        applyFilters();
+        applyFilters(false);
       });
       document.getElementById('rangeSelect').addEventListener('change', (e) => {
         localStorage.setItem(LS_LAST_RANGE, e.target.value);
-        applyFilters();
+        applyFilters(false);
       });
 
       document.getElementById('prevBtn').addEventListener('click', () => {
@@ -479,8 +541,7 @@
     }
 
     window.addEventListener('beforeunload', () => {
-      if (currentIndex >= 0)
-        localStorage.setItem(LS_LAST_INDEX, String(currentIndex));
+      saveLastIndexIfNeeded();
     });
   </script>
 </body>

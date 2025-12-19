@@ -6,10 +6,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f1115" />
 
-  <!-- Optional: PWA manifest + icon -->
-  <!-- If you don't have these files yet, you can remove these two lines. -->
-  <!-- <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="icon-192.png"> -->
+  <!-- Optional: comment these two lines out if you don't have the files yet -->
+  <!-- <link rel="manifest" href="manifest.json"> -->
+  <!-- <link rel="icon" href="assets/icon-192.png"> -->
 
   <style>
     :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
@@ -93,7 +92,7 @@
         const json = await res.json();
 
         for (const item of json.items || []) {
-          const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId;
+          const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId; // YouTube playlistItems structure [web:25]
           if (!vid) continue;
           out.push({
             videoId: vid,
@@ -128,7 +127,10 @@
             <div class="title">${ep.title}</div>
             <div class="pos">#${ep.index + 1}</div>
           </div>`;
-        row.addEventListener('click', () => playAtIndex(ep.index));
+        row.addEventListener('click', () => {
+          // User gesture: allowed to start playback
+          playAtIndex(ep.index);
+        });
         frag.appendChild(row);
       });
       list.appendChild(frag);
@@ -180,7 +182,7 @@
       player = new YT.Player('player', {
         height: '540',
         width: '960',
-        playerVars: { listType: 'playlist', list: PLAYLIST_ID, playsinline: 1 },
+        playerVars: { listType: 'playlist', list: PLAYLIST_ID, playsinline: 1 }, // basic playlist embed [web:12][web:15]
         events: { onReady: onReady, onStateChange: onStateChange }
       });
 
@@ -188,15 +190,16 @@
       if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
         try {
           state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
+          console.log('Fetched items:', state.all.length);
           if (state.all.length) {
             renderList(state.all);
             const ids = state.all.map(x => x.videoId);
-            player.loadPlaylist(ids);  // ensure playVideoAt(index) matches our list [web:12]
+            player.loadPlaylist(ids);  // make sure playVideoAt(index) aligns with our list [web:12]
             setNowPlaying(0);
           }
         } catch (err) {
           console.warn('Playlist fetch failed:', err);
-          showError('Data API fetch failed. Check your API key restrictions. Playback still works.');
+          showError('Data API fetch failed. Check your API key restrictions. Playback still works from the player.');
         }
       } else {
         showError('Search/filter needs an API key. Playback works via direct playlist.');
@@ -204,11 +207,10 @@
     };
 
     function onReady() {
+      // Do NOT auto-play; let user click either list or player (autoplay is often blocked) [web:46]
       const saved = JSON.parse(localStorage.getItem('series_resume') || '{}');
       if (saved && Number.isInteger(saved.index)) {
         state.currentIndex = saved.index;
-        player.playVideoAt(saved.index);
-        if (typeof saved.time === 'number') player.seekTo(saved.time, true);
         setNowPlaying(saved.index);
       } else {
         setNowPlaying(0);
@@ -228,11 +230,15 @@
       }
     }
 
-    function playAtIndex(i) { state.currentIndex = i; player.playVideoAt(i); setNowPlaying(i); }
+    function playAtIndex(i) {
+      state.currentIndex = i;
+      player.playVideoAt(i);
+      setNowPlaying(i);
+    }
     function prev() { const i = Math.max(0, state.currentIndex - 1); playAtIndex(i); }
     function next() { const i = Math.min((state.all.length || 999) - 1, state.currentIndex + 1); playAtIndex(i); }
-    document.getElementById('prev').onclick = prev;
-    document.getElementById('next').onclick = next;
+    document.getElementById('prev').onclick = () => prev();
+    document.getElementById('next').onclick = () => next();
 
     document.getElementById('resumeBtn').onclick = () => {
       const saved = JSON.parse(localStorage.getItem('series_resume') || '{}');
@@ -259,5 +265,3 @@
   </script>
 </body>
 </html>
-
-

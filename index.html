@@ -14,9 +14,11 @@
       --radius:8px;
     }
     * { box-sizing:border-box; }
-    body {
+    html, body {
       margin:0;
-      height:100vh;
+      height:100%;
+    }
+    body {
       display:flex;
       flex-direction:column;
       background:radial-gradient(circle at top,#1f2a3a 0,#121212 55%,#050509 100%);
@@ -30,6 +32,7 @@
       display:flex;
       align-items:center;
       gap:10px;
+      flex-shrink:0;
     }
     header img.logo {
       width:40px;
@@ -126,10 +129,11 @@
       flex-direction:column;
       gap:8px;
       margin-bottom:10px;
+      flex-shrink:0;
     }
     .now-title {
       font-weight:700;
-      font-size:27px; /* +10px increase */
+      font-size:27px;
       line-height:1.2;
     }
     .episode-main {
@@ -147,11 +151,11 @@
       display:flex;
       gap:8px;
       flex-shrink:0;
-      margin-top:auto;
     }
     .nav-buttons button {
       padding:6px 12px;
       font-size:14px;
+      height:40px; /* Fixed 40px height */
       border-radius:var(--radius);
       border:1px solid rgba(255,255,255,.2);
       background:rgba(20,20,32,.95);
@@ -159,6 +163,9 @@
       cursor:pointer;
       min-width:70px;
       flex:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
     }
     .nav-buttons button:disabled {
       opacity:.4;
@@ -177,7 +184,6 @@
       font-size:14px;
     }
 
-    /* Toggle switch, bigger for touch */
     .toggle-wrap {
       display:flex;
       align-items:center;
@@ -309,6 +315,7 @@
       border-top:1px solid #262626;
       background:#09090f;
       color:#aaaaaa;
+      flex-shrink:0;
     }
 
     @media (max-width:800px) {
@@ -335,7 +342,7 @@
   <header>
     <img src="Tenali-Ramakrishna.png" alt="Tenali Rama" class="logo">
     <div class="title-block">
-      <h1>Tenali Rama – Playlist Browser - Version 3.1</h1>
+      <h1>Tenali Rama – Version 3.2</h1>
       <div class="top-row">
         <input id="search" placeholder="Search by number or title..." />
         <button id="clearBtn">Clear</button>
@@ -392,7 +399,6 @@
     let player = null;
     let currentIndex = -1;
 
-    // 1x1 transparent placeholder
     const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
 
     const tag = document.createElement('script');
@@ -591,14 +597,19 @@
       const fullTitle = ep.title;
       const epNum = `Ep ${ep.index + 1}: `;
       
-      // Extract date from typical format "Tenali Rama - Ep 116 - Full Episode - 15th December, 2017"
-      const dateMatch = fullTitle.match(/(\d{1,2}(st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December),\s+\d{4})/i);
+      // Clean extraction: only show "Ep X: Tenali Rama" on first line
+      let mainTitle = fullTitle.replace(/^.*?(\bTenali Rama\b).*?(-?\s*Ep\s*\d+.*)?/i, '$1').trim();
+      if (!mainTitle || mainTitle === 'Tenali Rama') {
+        mainTitle = 'Tenali Rama';
+      }
+      
+      // Extract date pattern more precisely
+      const dateMatch = fullTitle.match(/(\d{1,2}(?:st|nd|rd|th)\s+(?:January|February|March|April|May|June|July|August|September|October|November|December),\s+\d{4})/i);
       const date = dateMatch ? dateMatch[0] : '';
-      const mainTitle = date ? fullTitle.replace(epNum, '').replace(` - Full Episode - ${date}`, '').trim() : fullTitle.replace(epNum, '').trim();
       
       tEl.innerHTML = `
         <span class="episode-main">${epNum}${mainTitle}</span>
-        <span class="episode-date">${date}</span>
+        ${date ? `<span class="episode-date">${date}</span>` : ''}
       `;
       
       prevBtn.disabled = (currentIndex <= 0);
@@ -637,7 +648,6 @@
       if (targetIdx == null || isNaN(targetIdx)) {
         return { start:0, end:Math.min(INITIAL_BATCH, total) };
       }
-      // Priority window around saved position (e.g., episode 116 area)
       const start = Math.max(targetIdx - 10, 0);
       const end   = Math.min(start + INITIAL_BATCH, total);
       return { start, end };
@@ -683,7 +693,6 @@
       filteredEpisodes = allEpisodes.slice(win.start, win.end);
       renderList();
 
-      // Background: progressively add remaining episodes in chunks
       (async () => {
         let chunkStart = Math.max(win.end, INITIAL_BATCH);
         while (chunkStart < allEpisodes.length) {
@@ -705,10 +714,7 @@
       searchEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           const term = searchEl.value.trim();
-          if (!term) {
-            // Empty search: do nothing at all
-            return;
-          }
+          if (!term) return;
           e.preventDefault();
           applyFilters(true);
           if (filteredEpisodes.length > 0) {

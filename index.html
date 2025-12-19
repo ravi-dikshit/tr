@@ -2,266 +2,134 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Series Browser + Player (PWA)</title>
+  <title>Series Player (804 Episodes)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#0f1115" />
-
-  <!-- Optional: comment these two lines out if you don't have the files yet -->
-  <!-- <link rel="manifest" href="manifest.json"> -->
-  <!-- <link rel="icon" href="assets/icon-192.png"> -->
-
   <style>
-    :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
-    * { box-sizing: border-box; }
-    body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Arial; }
-    header { padding:16px; display:flex; gap:12px; align-items:center; border-bottom:1px solid #222; }
-    input[type="search"] { flex:1; padding:10px 12px; border-radius:8px; border:1px solid #333; background:#12151b; color:var(--fg); }
-    .pill { padding:8px 12px; border:1px solid #333; border-radius:999px; background:#12151b; color:var(--muted); }
-    main { display:grid; grid-template-columns: 1fr 380px; gap:0; min-height:calc(100vh - 60px); }
-    #player-wrap { padding:16px; border-right:1px solid #222; }
-    #list { overflow:auto; }
-    .episode { display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid #222; cursor:pointer; }
-    .episode:hover, .episode:focus { background:#151924; outline: 2px solid var(--accent); outline-offset: 2px; }
-    .thumb { width:120px; height:68px; object-fit:cover; border-radius:6px; background:#222; }
-    .meta { display:flex; flex-direction:column; gap:4px; }
-    .title { font-size:14px; line-height:1.3; }
-    .pos { color:var(--muted); font-size:12px; }
-    footer { padding:8px 16px; display:flex; gap:12px; align-items:center; border-top:1px solid #222; }
-    button { background:var(--accent); color:white; border:0; border-radius:8px; padding:8px 12px; cursor:pointer; }
-    button.ghost { background:#12151b; color:var(--fg); border:1px solid #333; }
-    .small { font-size:12px; color:var(--muted); }
-    .hint { color:var(--muted); font-size:12px; padding:8px 16px; }
-    .error { color:#ff6b6b; font-size:12px; padding:8px 16px; }
+    :root{--bg:#121212;--fg:#fff;--accent:#ff0000;--card:#1e1e1e;}
+    body{background:var(--bg);color:var(--fg);font-family:system-ui;margin:0;padding:20px;max-width:1400px;margin:auto;}
+    #player{width:100%;height:400px;border:none;}@media(min-width:900px){#player{height:500px;}}
+    #search{width:100%;padding:12px;font-size:16px;border:1px solid var(--accent);border-radius:6px;background:var(--card);color:var(--fg);}
+    #list{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));}
+    .item{cursor:pointer;padding:16px;border-radius:8px;background:var(--card);transition:all .2s;border:2px solid transparent;}
+    .item:hover,.active{border-color:var(--accent);transform:translateY(-2px);}
+    .thumb{width:80px;height:45px;object-fit:cover;border-radius:4px;margin-right:12px;float:left;}
+    .title{font-weight:600;line-height:1.3;margin:0 0 4px;}
+    .num{font-size:14px;opacity:.7;}
+    #err{color:#ff4444;padding:12px;background:var(--card);border-radius:6px;display:none;}
+    #loading{padding:40px;text-align:center;}
   </style>
 </head>
 <body>
-  <header>
-    <input id="q" type="search" placeholder="Search episodes by title…" />
-    <div class="pill" id="count">0 episodes</div>
-    <button id="resumeBtn" class="ghost" title="Resume last watched">Resume</button>
-  </header>
-
-  <main>
-    <section id="player-wrap">
-      <div id="player" style="aspect-ratio:16/9; width:100%; max-width:960px;"></div>
-      <footer>
-        <button id="prev">⟸ Prev</button>
-        <button id="next">Next ⟹</button>
-        <span class="small" id="nowPlaying"></span>
-      </footer>
-      <div class="hint">
-        Tip: Use ↑/↓ to navigate the episode list, Enter to play. On TV, open this URL in Silk/Firefox (Fire TV) or Chrome (Android TV).
-      </div>
-      <div id="err" class="error" hidden></div>
-    </section>
-
-    <section id="list" tabindex="0" aria-label="Episode list"></section>
-  </main>
+  <h1>Series Player</h1>
+  <input id="search" placeholder="Search episodes (e.g., 'episode 150' or title keywords)...">
+  <div id="player"></div>
+  <div id="err"></div>
+  <div id="list"><div id="loading">Loading all episodes...</div></div>
 
   <script>
-    // ==============================
-    // CONFIG
-    // ==============================
-    const API_KEY = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8'; // browser key with HTTP referrer restriction [web:27][web:39]
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
+    const API_KEY = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8';
+    let allEpisodes = []; let player; let currentIndex = -1;
 
-    // ==============================
-    // STATE
-    // ==============================
-    const state = { all: [], filtered: [], currentIndex: 0 };
+    const tag = document.createElement('script'); 
+    tag.src = 'https://www.youtube.com/iframe_api'; 
+    document.head.appendChild(tag);
 
-    // ==============================
-    // YouTube Data API fetch
-    // ==============================
-    async function fetchAllPlaylistItems(playlistId) {
-      let pageToken = '';
-      const out = [];
-      while (true) {
-        const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
-        url.searchParams.set('part','snippet,contentDetails');
-        url.searchParams.set('maxResults','50');
-        url.searchParams.set('playlistId', playlistId);
-        if (pageToken) url.searchParams.set('pageToken', pageToken);
-        url.searchParams.set('key', API_KEY);
-
-        const res = await fetch(url);
-        if (!res.ok) {
-          const txt = await res.text().catch(()=> '');
-          throw new Error(`YouTube API error ${res.status}: ${txt}`);
-        }
-        const json = await res.json();
-
-        for (const item of json.items || []) {
-          const vid = item.contentDetails?.videoId || item.snippet?.resourceId?.videoId; // YouTube playlistItems structure [web:25]
-          if (!vid) continue;
-          out.push({
-            videoId: vid,
-            title: item.snippet?.title ?? '(untitled)',
-            thumb: item.snippet?.thumbnails?.medium?.url
-              || item.snippet?.thumbnails?.default?.url
-              || ''
-          });
-        }
-        pageToken = json.nextPageToken || '';
-        if (!pageToken) break;
-      }
-      return out.map((x, i) => ({...x, index:i}));
-    }
-
-    // ==============================
-    // Render list
-    // ==============================
-    function renderList(items) {
-      const list = document.getElementById('list');
-      list.innerHTML = '';
-      document.getElementById('count').textContent = `${items.length} episodes`;
-      const frag = document.createDocumentFragment();
-      items.forEach(ep => {
-        const row = document.createElement('div');
-        row.className = 'episode';
-        row.dataset.index = ep.index;
-        row.tabIndex = 0;
-        row.innerHTML = `
-          <img class="thumb" src="${ep.thumb || ''}" alt="Thumbnail">
-          <div class="meta">
-            <div class="title">${ep.title}</div>
-            <div class="pos">#${ep.index + 1}</div>
-          </div>`;
-        row.addEventListener('click', () => {
-          // User gesture: allowed to start playback
-          playAtIndex(ep.index);
-        });
-        frag.appendChild(row);
-      });
-      list.appendChild(frag);
-      state.filtered = items;
-    }
-
-    // Search / filter
-    document.getElementById('q').addEventListener('input', () => {
-      const term = document.getElementById('q').value.trim().toLowerCase();
-      const filtered = term ? state.all.filter(ep => ep.title.toLowerCase().includes(term)) : state.all;
-      renderList(filtered);
-    });
-
-    // TV/keyboard navigation for the list
-    const listEl = document.getElementById('list');
-    listEl.addEventListener('keydown', (e) => {
-      const items = Array.from(document.querySelectorAll('.episode'));
-      const current = document.activeElement;
-      const idx = items.indexOf(current);
-      if (e.key === 'ArrowDown' && idx < items.length - 1) { items[idx + 1]?.focus(); e.preventDefault(); }
-      else if (e.key === 'ArrowUp' && idx > 0) { items[idx - 1]?.focus(); e.preventDefault(); }
-      else if (e.key === 'Enter') { current?.click(); }
-    });
-
-    // ==============================
-    // Service worker (PWA)
-    // ==============================
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        try {
-          const reg = await navigator.serviceWorker.register('service-worker.js');
-          console.log('SW registered', reg);
-        } catch (e) {
-          console.warn('SW registration failed', e);
-        }
-      });
-    }
-
-    // ==============================
-    // YouTube IFrame Player
-    // ==============================
-    let player;
-    const ytTag = document.createElement('script');
-    ytTag.src = 'https://www.youtube.com/iframe_api';
-    document.head.appendChild(ytTag);
-
-    window.onYouTubeIframeAPIReady = async function () {
-      // 1) Load playlist directly by ID
+    function onYouTubeIframeAPIReady() {
       player = new YT.Player('player', {
-        height: '540',
-        width: '960',
-        playerVars: { listType: 'playlist', list: PLAYLIST_ID, playsinline: 1 }, // basic playlist embed [web:12][web:15]
-        events: { onReady: onReady, onStateChange: onStateChange }
+        height: '400', width: '100%',
+        events: { onReady: onPlayerReady }
       });
+    }
 
-      // 2) Build the searchable list
-      if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
+    async function fetchAllPlaylistItems() {
+      let items = []; let nextPageToken = ''; let page = 0;
+      do {
         try {
-          state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
-          console.log('Fetched items:', state.all.length);
-          if (state.all.length) {
-            renderList(state.all);
-            const ids = state.all.map(x => x.videoId);
-            player.loadPlaylist(ids);  // make sure playVideoAt(index) aligns with our list [web:12]
-            setNowPlaying(0);
-          }
-        } catch (err) {
-          console.warn('Playlist fetch failed:', err);
-          showError('Data API fetch failed. Check your API key restrictions. Playback still works from the player.');
+          const url = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${PLAYLIST_ID}&key=${API_KEY}&pageToken=${nextPageToken}`;
+          const res = await fetch(url);
+          const json = await res.json();
+          if (json.error) throw json.error;
+          items.push(...(json.items || []));
+          nextPageToken = json.nextPageToken;
+          page++;
+          document.getElementById('loading').textContent = `Loaded ${items.length} of ~804 episodes...`;
+        } catch (e) {
+          showError(`API error (page ${page}): ${e.message}. Check Google Cloud Console referrers include *.github.io`);
+          return;
         }
-      } else {
-        showError('Search/filter needs an API key. Playback works via direct playlist.');
-      }
-    };
-
-    function onReady() {
-      // Do NOT auto-play; let user click either list or player (autoplay is often blocked) [web:46]
-      const saved = JSON.parse(localStorage.getItem('series_resume') || '{}');
-      if (saved && Number.isInteger(saved.index)) {
-        state.currentIndex = saved.index;
-        setNowPlaying(saved.index);
-      } else {
-        setNowPlaying(0);
-      }
+      } while (nextPageToken && items.length < 1000);
+      
+      allEpisodes = items.map((item, i) => ({
+        index: i, 
+        title: item.snippet.title, 
+        vid: item.snippet.resourceId.videoId,
+        thumb: item.snippet.thumbnails.medium.url
+      }));
+      console.log(`Loaded ${allEpisodes.length} episodes`);
     }
 
-    function onStateChange(e) {
-      const s = e.data;
-      if (s === YT.PlayerState.PLAYING) setNowPlaying(state.currentIndex);
-      if (s === YT.PlayerState.PAUSED || s === YT.PlayerState.ENDED) {
-        localStorage.setItem('series_resume', JSON.stringify({
-          index: state.currentIndex, time: player.getCurrentTime()
-        }));
-        if (s === YT.PlayerState.ENDED) {
-          if (state.all.length) next(); else player.nextVideo();
-        }
-      }
-    }
-
-    function playAtIndex(i) {
-      state.currentIndex = i;
-      player.playVideoAt(i);
-      setNowPlaying(i);
-    }
-    function prev() { const i = Math.max(0, state.currentIndex - 1); playAtIndex(i); }
-    function next() { const i = Math.min((state.all.length || 999) - 1, state.currentIndex + 1); playAtIndex(i); }
-    document.getElementById('prev').onclick = () => prev();
-    document.getElementById('next').onclick = () => next();
-
-    document.getElementById('resumeBtn').onclick = () => {
-      const saved = JSON.parse(localStorage.getItem('series_resume') || '{}');
-      if (saved && Number.isInteger(saved.index)) {
-        playAtIndex(saved.index);
-        if (typeof saved.time === 'number') player.seekTo(saved.time, true);
-      }
-    };
-
-    function setNowPlaying(i) {
-      const now = document.getElementById('nowPlaying');
-      const ep = state.all[i];
-      now.textContent = ep ? `Now playing: #${i+1} — ${ep.title}` : `Playing episode #${i+1}`;
-      document.querySelectorAll('.episode').forEach(el => {
-        el.style.outline = (Number(el.dataset.index) === i) ? '1px solid var(--accent)' : 'none';
+    function renderList(filtered = allEpisodes) {
+      const list = document.getElementById('list'); 
+      list.innerHTML = '';
+      filtered.forEach(ep => {
+        const div = document.createElement('div'); 
+        div.className = 'item'; 
+        div.dataset.index = ep.index;
+        div.onclick = () => playEpisode(ep.index);
+        div.innerHTML = `
+          <img class="thumb" src="${ep.thumb}" alt="${ep.title}" loading="lazy">
+          <div>
+            <h3 class="title">${ep.title}</h3>
+            <div class="num">Episode ${ep.index + 1}</div>
+          </div>`;
+        list.appendChild(div);
       });
+      if (!filtered.length) {
+        list.innerHTML = '<div style="grid-column:1;">No episodes match search.</div>';
+      }
     }
 
-    function showError(msg) {
-      const el = document.getElementById('err');
-      el.textContent = msg;
-      el.hidden = false;
+    function playEpisode(idx) {
+      if (!player) return;
+      currentIndex = idx;
+      const videoIds = allEpisodes.map(e => e.vid);
+      player.loadPlaylist({ list: videoIds, index: idx });
+      document.querySelectorAll('.item').forEach(el => 
+        el.classList.toggle('active', Number(el.dataset.index) === idx)
+      );
+      localStorage.setItem('lastEpisode', idx);
     }
+
+    function showError(msg) { 
+      const el = document.getElementById('err'); 
+      el.textContent = msg; 
+      el.style.display = 'block'; 
+    }
+
+    async function onPlayerReady(event) {
+      await fetchAllPlaylistItems();
+      if (!allEpisodes.length) return;
+      renderList();
+      
+      const saved = localStorage.getItem('lastEpisode');
+      if (saved !== null && parseInt(saved) < allEpisodes.length) {
+        playEpisode(parseInt(saved));
+      }
+      
+      document.getElementById('search').oninput = (e) => {
+        const term = e.target.value.toLowerCase();
+        const filtered = allEpisodes.filter(ep => 
+          ep.title.toLowerCase().includes(term) || 
+          ep.index.toString().includes(term)
+        );
+        renderList(filtered);
+      };
+    }
+
+    document.addEventListener('beforeunload', () => { 
+      if (currentIndex > -1) localStorage.setItem('lastEpisode', currentIndex); 
+    });
   </script>
 </body>
 </html>

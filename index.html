@@ -176,13 +176,6 @@
       font-size:14px;
     }
 
-    .playlist-bottom {
-      padding:15px 10px 20px;
-      border-top:1px solid #262626;
-      margin-top:auto;
-      text-align:center;
-    }
-
     .toggle-wrap {
       display:flex;
       align-items:center;
@@ -259,7 +252,7 @@
       box-shadow:0 6px 16px rgba(0,0,0,.6);
       transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;
       align-items:flex-start;
-      margin:0 10px;
+      margin:0 10px; /* desktop margin */
     }
     .item:hover {
       border-color:rgba(255,255,255,.25);
@@ -307,6 +300,13 @@
       font-size:14px;
     }
 
+    .playlist-bottom {
+      padding:15px 10px 20px;
+      margin-top:10px;
+      text-align:center;
+      border-top:1px solid #262626;
+    }
+
     footer {
       padding:8px 16px;
       font-size:12px;
@@ -340,8 +340,12 @@
         padding:0 5px;
         padding-bottom:120px;
       }
-      .item { margin:0; }
-      .playlist-bottom { padding:15px 5px 20px; }
+      .item {
+        margin:0; /* no margin on mobile */
+      }
+      .playlist-bottom {
+        padding:15px 5px 20px;
+      }
     }
   </style>
 </head>
@@ -349,7 +353,7 @@
   <header>
     <img src="Tenali-Ramakrishna.png" alt="Tenali Rama" class="logo">
     <div class="title-block">
-      <h1>Tenali Rama – Version 3.5</h1>
+      <h1>Tenali Rama – Version 3.6</h1>
       <div class="top-row">
         <input id="search" placeholder="Search by number or title..." />
         <button id="clearBtn">Clear</button>
@@ -384,10 +388,10 @@
       <div id="listWrapper">
         <div id="list">
           <div id="loading">Loading episodes...</div>
+          <div class="playlist-bottom">
+            <select id="rangeSelectBottom"></select>
+          </div>
         </div>
-      </div>
-      <div class="playlist-bottom">
-        <select id="rangeSelectBottom"></select>
       </div>
     </aside>
   </div>
@@ -614,6 +618,15 @@
         list.appendChild(row);
       });
 
+      // move existing bottom block to end again
+      const bottom = document.createElement('div');
+      bottom.className = 'playlist-bottom';
+      const bottomSelect = document.createElement('select');
+      bottomSelect.id = 'rangeSelectBottom';
+      bottom.appendChild(bottomSelect);
+      list.appendChild(bottom);
+      buildRangeOptions(allEpisodes.length); // keep options in sync
+
       const active = list.querySelector('.item.active');
       if (active) {
         const wrapper = document.getElementById('listWrapper');
@@ -655,6 +668,17 @@
     function playEpisode(idx) {
       if (!player || !allEpisodes[idx]) return;
       currentIndex = idx;
+
+      // auto-switch range when crossing 100-episode blocks
+      const newRange = indexToRange(idx);
+      const topSelect = document.getElementById('rangeSelect');
+      const bottomSelect = document.getElementById('rangeSelectBottom');
+      if (topSelect && bottomSelect && topSelect.value !== String(newRange)) {
+        topSelect.value = String(newRange);
+        bottomSelect.value = String(newRange);
+        localStorage.setItem(LS_LAST_RANGE, String(newRange));
+        applyFilters(false);
+      }
 
       const vid = allEpisodes[idx].vid;
       if (vid) player.loadVideoById(vid);
@@ -768,8 +792,11 @@
       document.getElementById('rangeSelect')?.addEventListener('change', (e) => {
         updateRangeSelection(e.target.value);
       });
-      document.getElementById('rangeSelectBottom')?.addEventListener('change', (e) => {
-        updateRangeSelection(e.target.value);
+
+      document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'rangeSelectBottom') {
+          updateRangeSelection(e.target.value);
+        }
       });
 
       document.getElementById('prevBtn')?.addEventListener('click', () => {

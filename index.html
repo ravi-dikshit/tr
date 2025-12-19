@@ -65,14 +65,14 @@
     }
     .left {
       flex:3;
-      padding:10px 16px 16px;
+      padding:10px 16px 0;
       display:flex;
       flex-direction:column;
       min-width:0;
     }
     .right {
       flex:2;
-      padding:10px 10px 10px 0;
+      padding:10px 10px 0 0;
       border-left:1px solid #262626;
       display:flex;
       flex-direction:column;
@@ -107,11 +107,11 @@
       justify-content:space-between;
       gap:8px;
       margin-bottom:8px;
-      font-size:14px;
+      font-size:15px; /* increased */
     }
     .now-title {
       flex:1;
-      font-weight:600;
+      font-weight:700;
       overflow:hidden;
       text-overflow:ellipsis;
       white-space:nowrap;
@@ -146,16 +146,51 @@
       margin-bottom:8px;
       font-size:13px;
     }
-    .resume-toggle {
+
+    /* Toggle switch */
+    .toggle-wrap {
       display:flex;
       align-items:center;
-      gap:4px;
+      gap:6px;
       font-size:12px;
     }
-    #resumeToggle {
-      accent-color:var(--accent);
-      cursor:pointer;
+    .switch {
+      position:relative;
+      display:inline-block;
+      width:34px;
+      height:18px;
     }
+    .switch input {
+      opacity:0;
+      width:0;
+      height:0;
+    }
+    .slider {
+      position:absolute;
+      cursor:pointer;
+      inset:0;
+      background-color:#444;
+      transition:.2s;
+      border-radius:999px;
+    }
+    .slider:before {
+      position:absolute;
+      content:"";
+      height:14px;
+      width:14px;
+      left:2px;
+      bottom:2px;
+      background-color:white;
+      transition:.2s;
+      border-radius:50%;
+    }
+    .switch input:checked + .slider {
+      background-color:var(--accent);
+    }
+    .switch input:checked + .slider:before {
+      transform:translateX(16px);
+    }
+
     #rangeSelect {
       padding:4px 6px;
       font-size:13px;
@@ -228,6 +263,15 @@
       font-size:13px;
     }
 
+    footer {
+      padding:8px 16px;
+      font-size:12px;
+      text-align:center;
+      border-top:1px solid #262626;
+      background:#09090f;
+      color:#aaaaaa;
+    }
+
     @media (max-width:800px) {
       .main { flex-direction:column; }
       .right {
@@ -266,9 +310,12 @@
 
     <aside class="right">
       <div class="right-top">
-        <div class="resume-toggle">
-          <input type="checkbox" id="resumeToggle" />
-          <label for="resumeToggle">Resume last episode</label>
+        <div class="toggle-wrap">
+          <label class="switch">
+            <input type="checkbox" id="resumeToggle" checked>
+            <span class="slider"></span>
+          </label>
+          <span>Remember last position</span>
         </div>
         <select id="rangeSelect"></select>
       </div>
@@ -280,10 +327,13 @@
     </aside>
   </div>
 
+  <footer>© 2025 All rights reserved. Ravi Dikshit</footer>
+
   <script>
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
     const API_KEY     = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8';
     const RANGE_SIZE  = 100;
+    const INITIAL_BATCH = 20;
     const LS_LAST_INDEX = 'tr_lastEpisodeIndex';
     const LS_LAST_RANGE = 'tr_lastRange';
     const LS_RESUME_ON  = 'tr_resumeOn';
@@ -491,9 +541,25 @@
       el.style.display = 'block';
     }
 
+    // Render only a window around a target index first (for resume)
+    function initialWindowIndices(targetIdx, total) {
+      if (targetIdx == null || isNaN(targetIdx)) {
+        return { start:0, end:Math.min(INITIAL_BATCH, total) };
+      }
+      const start = Math.max(targetIdx - 10, 0);
+      const end   = Math.min(start + INITIAL_BATCH, total);
+      return { start, end };
+    }
+
     async function onPlayerReady() {
       const resumeToggle = document.getElementById('resumeToggle');
-      resumeToggle.checked = localStorage.getItem(LS_RESUME_ON) === '1';
+      const storedResume = localStorage.getItem(LS_RESUME_ON);
+      if (storedResume === null) {
+        resumeToggle.checked = true; // default ON
+      } else {
+        resumeToggle.checked = storedResume === '1';
+      }
+
       resumeToggle.addEventListener('change', () => {
         localStorage.setItem(LS_RESUME_ON, resumeToggle.checked ? '1' : '0');
         if (resumeToggle.checked && currentIndex >= 0) {
@@ -505,31 +571,54 @@
       if (!allEpisodes.length) return;
 
       buildRangeOptions(allEpisodes.length);
-      applyFilters(false);
 
       const resumeOn = resumeToggle.checked;
       const savedIdx = resumeOn ? localStorage.getItem(LS_LAST_INDEX) : null;
+      let startIdxToPlay = 0;
 
       if (savedIdx !== null) {
         const idx = Number(savedIdx);
         if (!Number.isNaN(idx) && idx >= 0 && idx < allEpisodes.length) {
-          const r = indexToRange(idx);
-          document.getElementById('rangeSelect').value = String(r);
-          localStorage.setItem(LS_LAST_RANGE, String(r));
-          applyFilters(false);
-          playEpisode(idx);
-        } else {
-          playEpisode(0);
+          startIdxToPlay = idx;
         }
-      } else {
-        playEpisode(0);
       }
+
+      // Pre-render window around target index
+      const win = initialWindowIndices(startIdxToPlay, allEpisodes.length);
+      const rangeSel = document.getElementById('rangeSelect');
+      const desiredRange = indexToRange(startIdxToPlay);
+      rangeSel.value = String(desiredRange);
+      localStorage.setItem(LS_LAST_RANGE, rangeSel.value);
+
+      filteredEpisodes = allEpisodes.slice(win.start, win.end);
+      renderList();
+
+      // Background fill of remaining episodes
+      (async () => {
+        const remaining = [];
+        for (let i = 0; i < allEpisodes.length; i++) {
+          if (i < win.start || i >= win.end) remaining.push(allEpisodes[i]);
+        }
+        if (remaining.length) {
+          filteredEpisodes = allEpisodes.filter(ep => {
+            const rIdx = Number(rangeSel.value || 0);
+            const s = rIdx * RANGE_SIZE;
+            const e = s + RANGE_SIZE;
+            return ep.index >= s && ep.index < e;
+          });
+          renderList();
+        }
+      })();
+
+      // Auto play selected or first
+      playEpisode(startIdxToPlay);
 
       const searchEl = document.getElementById('search');
       searchEl.addEventListener('input', () => applyFilters(true));
       searchEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
+          applyFilters(true);
           if (filteredEpisodes.length > 0) {
             playEpisode(filteredEpisodes[0].index);
           }

@@ -25,7 +25,13 @@
   <div id="player"></div>
   <div id="err"></div>
   <div id="list"><div id="loading">Loading all episodes...</div></div>
+  <div style="BORDER:10px solid red;">
+TESTING FRAME
+    <iframe width="560" height="315"
+  src="https://www.youtube.com/embed/VIDEO_ID_HERE"
+  frameborder="0" allowfullscreen></iframe>
 
+  </div>
   <script>
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
     const API_KEY = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8';
@@ -147,15 +153,10 @@ allEpisodes = items.map((item, i) => {
       if (currentIndex > -1) localStorage.setItem('lastEpisode', currentIndex); 
     });
   </script>
-  <div style="BORDER:10px solid red;">
-TESTING FRAME
-    <iframe width="560" height="315"
-  src="https://www.youtube.com/embed/VIDEO_ID_HERE"
-  frameborder="0" allowfullscreen></iframe>
 
-  </div>
 </body>
 </html>
+
 
 
 

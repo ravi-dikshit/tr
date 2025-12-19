@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,11 +5,8 @@
   <title>Series Browser + Player (PWA)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f1115" />
-
-  <!-- ✅ Correct manifest and icon links (GitHub Pages-friendly, relative paths) -->
   manifest.json
   assets/icon-192.png
-
   <style>
     :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
     * { box-sizing: border-box; }
@@ -22,7 +18,7 @@
     #player-wrap { padding:16px; border-right:1px solid #222; }
     #list { overflow:auto; }
     .episode { display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid #222; cursor:pointer; }
-    .episode:hover, .episode:focus { background:#151924; outline:2px solid var(--accent); outline-offset:2px; }
+    .episode:hover, .episode:focus { background:#151924; outline: 2px solid var(--accent); outline-offset: 2px; }
     .thumb { width:120px; height:68px; object-fit:cover; border-radius:6px; background:#222; }
     .meta { display:flex; flex-direction:column; gap:4px; }
     .title { font-size:14px; line-height:1.3; }
@@ -63,19 +59,22 @@
     // ==============================
     // CONFIG
     // ==============================
-    // ⚠️ Replace with your own (restricted) API key to enable search/filter
-    const API_KEY = 'YOUR_API_KEY';
-    // Your playlist ID from the YouTube URL's `list` parameter
+    const API_KEY = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8'; // optional for enhanced list/search
+    // ✅ Playlist ID from your URL's "list" parameter:
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
 
     // ==============================
     // STATE
     // ==============================
-    const state = { all: [], filtered: [], currentIndex: 0 };
+    const state = {
+      all: [],        // [{index, videoId, title, thumb}]
+      filtered: [],   // current filtered view
+      currentIndex: 0
+    };
 
     // ==============================
-    // YouTube Data API fetch (requires valid API key)
-    // playlistItems.list returns up to 50 items per page; use nextPageToken for pagination.
+    // YT DATA API FETCH (optional)
+    // playlistItems.list supports maxResults=50 + pagination via nextPageToken.
     // ==============================
     async function fetchAllPlaylistItems(playlistId) {
       let pageToken = '';
@@ -113,7 +112,7 @@
     }
 
     // ==============================
-    // Render list
+    // LIST RENDER
     // ==============================
     function renderList(items) {
       const list = document.getElementById('list');
@@ -124,7 +123,7 @@
         const row = document.createElement('div');
         row.className = 'episode';
         row.dataset.index = ep.index;
-        row.tabIndex = 0;
+        row.tabIndex = 0; // TV/keyboard focus
         row.innerHTML = `
           ${ep.thumb}
           <div class="meta">
@@ -139,25 +138,32 @@
     }
 
     // Search / filter
-    document.getElementById('q').addEventListener('input', () => {
-      const term = document.getElementById('q').value.trim().toLowerCase();
-      const filtered = term ? state.all.filter(ep => ep.title.toLowerCase().includes(term)) : state.all;
+    const q = document.getElementById('q');
+    q.addEventListener('input', () => {
+      const term = q.value.trim().toLowerCase();
+      const filtered = term
+        ? state.all.filter(ep => ep.title.toLowerCase().includes(term))
+        : state.all;
       renderList(filtered);
     });
 
-    // TV/keyboard navigation for the list
+    // Arrow key navigation for list
     const listEl = document.getElementById('list');
     listEl.addEventListener('keydown', (e) => {
       const items = Array.from(document.querySelectorAll('.episode'));
       const current = document.activeElement;
       const idx = items.indexOf(current);
-      if (e.key === 'ArrowDown' && idx < items.length - 1) { items[idx + 1]?.focus(); e.preventDefault(); }
-      else if (e.key === 'ArrowUp' && idx > 0) { items[idx - 1]?.focus(); e.preventDefault(); }
-      else if (e.key === 'Enter') { current?.click(); }
+      if (e.key === 'ArrowDown' && idx < items.length - 1) {
+        items[idx + 1]?.focus(); e.preventDefault();
+      } else if (e.key === 'ArrowUp' && idx > 0) {
+        items[idx - 1]?.focus(); e.preventDefault();
+      } else if (e.key === 'Enter') {
+        current?.click();
+      }
     });
 
     // ==============================
-    // Service worker (PWA) — relative path for GitHub Pages
+    // SERVICE WORKER (PWA)
     // ==============================
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
@@ -171,7 +177,7 @@
     }
 
     // ==============================
-    // YouTube IFrame Player
+    // YOUTUBE IFRAME PLAYER
     // ==============================
     let player;
     const ytTag = document.createElement('script');
@@ -179,27 +185,36 @@
     document.head.appendChild(ytTag);
 
     window.onYouTubeIframeAPIReady = async function () {
-      // 1) Load playlist directly by ID (works even if Data API is not used)
+      // 1) Create player that loads the playlist directly by ID (works even without API key)
       player = new YT.Player('player', {
         height: '540',
         width: '960',
-        playerVars: { listType: 'playlist', list: PLAYLIST_ID, playsinline: 1 },
-        events: { onReady: onReady, onStateChange: onStateChange }
+        playerVars: {
+          listType: 'playlist',
+          list: PLAYLIST_ID,
+          playsinline: 1
+        },
+        events: {
+          onReady: onReady,
+          onStateChange: onStateChange
+        }
       });
 
-      // 2) Build the searchable list (requires valid API key)
-      if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
+      // 2) Try to fetch details for list/search (optional)
+      if (API_KEY && API_KEY !== 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8') {
         try {
-          state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
-          if (state.all.length) {
+          const items = await fetchAllPlaylistItems(PLAYLIST_ID);
+          if (items && items.length) {
+            state.all = items;
             renderList(state.all);
             const ids = state.all.map(x => x.videoId);
-            player.loadPlaylist(ids);  // lock order + enable playVideoAt(index)
+            // Load explicit video IDs to lock order (and enable playVideoAt index exactly)
+            player.loadPlaylist(ids);
             setNowPlaying(0);
           }
         } catch (err) {
           console.warn('Playlist fetch failed:', err);
-          showError('Data API fetch failed. Check your API key restrictions. Playback still works.');
+          showError('Data API fetch failed. Check your API key or domain restrictions. Player will still work.');
         }
       } else {
         showError('Search/filter needs an API key. Playback works via direct playlist.');
@@ -220,20 +235,41 @@
 
     function onStateChange(e) {
       const s = e.data;
-      if (s === YT.PlayerState.PLAYING) setNowPlaying(state.currentIndex);
+      if (s === YT.PlayerState.PLAYING) {
+        setNowPlaying(state.currentIndex);
+      }
       if (s === YT.PlayerState.PAUSED || s === YT.PlayerState.ENDED) {
         localStorage.setItem('series_resume', JSON.stringify({
-          index: state.currentIndex, time: player.getCurrentTime()
+          index: state.currentIndex,
+          time: player.getCurrentTime()
         }));
         if (s === YT.PlayerState.ENDED) {
+          // If we have a data list, use our next() helper; else use the player's nextVideo()
           if (state.all.length) next(); else player.nextVideo();
         }
       }
     }
 
-    function playAtIndex(i) { state.currentIndex = i; player.playVideoAt(i); setNowPlaying(i); }
-    function prev() { const i = Math.max(0, state.currentIndex - 1); playAtIndex(i); }
-    function next() { const i = Math.min((state.all.length || 999) - 1, state.currentIndex + 1); playAtIndex(i); }
+    function playAtIndex(i) {
+      state.currentIndex = i;
+      if (state.all.length) {
+        player.playVideoAt(i);
+      } else {
+        // Without API list, we can attempt to seek by next/prev repeatedly (not perfect).
+        player.playVideoAt(i);
+      }
+      setNowPlaying(i);
+    }
+    function prev() {
+      const i = Math.max(0, state.currentIndex - 1);
+      if (state.all.length) playAtIndex(i);
+      else player.previousVideo();
+    }
+    function next() {
+      const i = Math.min((state.all.length || 999) - 1, state.currentIndex + 1);
+      if (state.all.length) playAtIndex(i);
+      else player.nextVideo();
+    }
     document.getElementById('prev').onclick = prev;
     document.getElementById('next').onclick = next;
 
@@ -246,5 +282,22 @@
     };
 
     function setNowPlaying(i) {
+      state.currentIndex = i;
       const now = document.getElementById('nowPlaying');
       const ep = state.all[i];
+      now.textContent = ep
+        ? `Now playing: #${i+1} — ${ep.title}`
+        : `Playing episode #${i+1}`;
+      document.querySelectorAll('.episode').forEach(el => {
+        el.style.outline = (Number(el.dataset.index) === i) ? '1px solid var(--accent)' : 'none';
+      });
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('err');
+      el.textContent = msg;
+      el.hidden = false;
+    }
+  </script>
+</body>
+</html>

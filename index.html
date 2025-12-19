@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,8 +7,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f1115" />
 
-  <!-- ✅ Correct manifest and icon links -->
-  <link rel="manifest" href="manifest.jsonssets/icon-192ot { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
+  <!-- ✅ Correct manifest and icon links (GitHub Pages-friendly, relative paths) -->
+  manifest.json
+  assets/icon-192.png
+
+  <style>
+    :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
     * { box-sizing: border-box; }
     body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Arial; }
     header { padding:16px; display:flex; gap:12px; align-items:center; border-bottom:1px solid #222; }
@@ -17,7 +22,7 @@
     #player-wrap { padding:16px; border-right:1px solid #222; }
     #list { overflow:auto; }
     .episode { display:flex; gap:10px; padding:10px 12px; border-bottom:1px solid #222; cursor:pointer; }
-    .episode:hover, .episode:focus { background:#151924; outline: 2px solid var(--accent); outline-offset: 2px; }
+    .episode:hover, .episode:focus { background:#151924; outline:2px solid var(--accent); outline-offset:2px; }
     .thumb { width:120px; height:68px; object-fit:cover; border-radius:6px; background:#222; }
     .meta { display:flex; flex-direction:column; gap:4px; }
     .title { font-size:14px; line-height:1.3; }
@@ -58,11 +63,20 @@
     // ==============================
     // CONFIG
     // ==============================
-    const API_KEY = 'YOUR_API_KEY'; // Replace with your restricted key
+    // ⚠️ Replace with your own (restricted) API key to enable search/filter
+    const API_KEY = 'YOUR_API_KEY';
+    // Your playlist ID from the YouTube URL's `list` parameter
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
 
+    // ==============================
+    // STATE
+    // ==============================
     const state = { all: [], filtered: [], currentIndex: 0 };
 
+    // ==============================
+    // YouTube Data API fetch (requires valid API key)
+    // playlistItems.list returns up to 50 items per page; use nextPageToken for pagination.
+    // ==============================
     async function fetchAllPlaylistItems(playlistId) {
       let pageToken = '';
       const out = [];
@@ -75,7 +89,10 @@
         url.searchParams.set('key', API_KEY);
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`YouTube API error ${res.status}`);
+        if (!res.ok) {
+          const txt = await res.text().catch(()=> '');
+          throw new Error(`YouTube API error ${res.status}: ${txt}`);
+        }
         const json = await res.json();
 
         for (const item of json.items || []) {
@@ -84,7 +101,9 @@
           out.push({
             videoId: vid,
             title: item.snippet?.title ?? '(untitled)',
-            thumb: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || ''
+            thumb: item.snippet?.thumbnails?.medium?.url
+              || item.snippet?.thumbnails?.default?.url
+              || ''
           });
         }
         pageToken = json.nextPageToken || '';
@@ -93,6 +112,9 @@
       return out.map((x, i) => ({...x, index:i}));
     }
 
+    // ==============================
+    // Render list
+    // ==============================
     function renderList(items) {
       const list = document.getElementById('list');
       list.innerHTML = '';
@@ -116,28 +138,48 @@
       state.filtered = items;
     }
 
+    // Search / filter
     document.getElementById('q').addEventListener('input', () => {
       const term = document.getElementById('q').value.trim().toLowerCase();
       const filtered = term ? state.all.filter(ep => ep.title.toLowerCase().includes(term)) : state.all;
       renderList(filtered);
     });
 
+    // TV/keyboard navigation for the list
+    const listEl = document.getElementById('list');
+    listEl.addEventListener('keydown', (e) => {
+      const items = Array.from(document.querySelectorAll('.episode'));
+      const current = document.activeElement;
+      const idx = items.indexOf(current);
+      if (e.key === 'ArrowDown' && idx < items.length - 1) { items[idx + 1]?.focus(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp' && idx > 0) { items[idx - 1]?.focus(); e.preventDefault(); }
+      else if (e.key === 'Enter') { current?.click(); }
+    });
+
+    // ==============================
+    // Service worker (PWA) — relative path for GitHub Pages
+    // ==============================
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          await navigator.serviceWorker.register('service-worker.js');
+          const reg = await navigator.serviceWorker.register('service-worker.js');
+          console.log('SW registered', reg);
         } catch (e) {
           console.warn('SW registration failed', e);
         }
       });
     }
 
+    // ==============================
+    // YouTube IFrame Player
+    // ==============================
     let player;
     const ytTag = document.createElement('script');
     ytTag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(ytTag);
 
     window.onYouTubeIframeAPIReady = async function () {
+      // 1) Load playlist directly by ID (works even if Data API is not used)
       player = new YT.Player('player', {
         height: '540',
         width: '960',
@@ -145,17 +187,19 @@
         events: { onReady: onReady, onStateChange: onStateChange }
       });
 
+      // 2) Build the searchable list (requires valid API key)
       if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
         try {
           state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
           if (state.all.length) {
             renderList(state.all);
             const ids = state.all.map(x => x.videoId);
-            player.loadPlaylist(ids);
+            player.loadPlaylist(ids);  // lock order + enable playVideoAt(index)
             setNowPlaying(0);
           }
         } catch (err) {
-          showError('Data API fetch failed. Playback still works.');
+          console.warn('Playlist fetch failed:', err);
+          showError('Data API fetch failed. Check your API key restrictions. Playback still works.');
         }
       } else {
         showError('Search/filter needs an API key. Playback works via direct playlist.');
@@ -204,17 +248,3 @@
     function setNowPlaying(i) {
       const now = document.getElementById('nowPlaying');
       const ep = state.all[i];
-      now.textContent = ep ? `Now playing: #${i+1} — ${ep.title}` : `Playing episode #${i+1}`;
-      document.querySelectorAll('.episode').forEach(el => {
-        el.style.outline = (Number(el.dataset.index) === i) ? '1px solid var(--accent)' : 'none';
-      });
-    }
-
-    function showError(msg) {
-      const el = document.getElementById('err');
-      el.textContent = msg;
-      el.hidden = false;
-    }
-  </script>
-</body>
-</html>

@@ -6,11 +6,9 @@
   <title>Series Browser + Player (PWA)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f1115" />
-  <!-- NOTE: use relative paths on GitHub Pages -->
+  <!-- ✅ Proper PWA link tags (relative paths for GitHub Pages) -->
   manifest.json
-  assets/icon-192.png
-  <style>
-    :root { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
+  <link rel="icon" href="assets/icon-192.png" sizes="192x192fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
     * { box-sizing: border-box; }
     body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Arial; }
     header { padding:16px; display:flex; gap:12px; align-items:center; border-bottom:1px solid #222; }
@@ -61,8 +59,9 @@
     // ==============================
     // CONFIG
     // ==============================
-    const API_KEY = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8'; // optional for enhanced list/search
-    const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y'; // from your URL
+    // ⚠️ Replace with your regenerated/restricted key
+    const API_KEY = 'YOUR_API_KEY';
+    const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
 
     // ==============================
     // STATE
@@ -70,7 +69,7 @@
     const state = { all: [], filtered: [], currentIndex: 0 };
 
     // ==============================
-    // Data API fetch (optional; requires valid API key and referrer configured)
+    // YouTube Data API fetch (optional; needs valid API key)
     // ==============================
     async function fetchAllPlaylistItems(playlistId) {
       let pageToken = '';
@@ -119,9 +118,10 @@
         const row = document.createElement('div');
         row.className = 'episode';
         row.dataset.index = ep.index;
-        row.tabIndex = 0; // TV/keyboard focus
+        row.tabIndex = 0;
         row.innerHTML = `
-          <img class="thumb" src="${ep.thumb}" alt
+          ${ep.thumb}
+          <div class="meta">
             <div class="title">${ep.title}</div>
             <div class="pos">#${ep.index + 1}</div>
           </div>`;
@@ -132,7 +132,7 @@
       state.filtered = items;
     }
 
-    // search/filter
+    // Search / filter
     document.getElementById('q').addEventListener('input', () => {
       const term = document.getElementById('q').value.trim().toLowerCase();
       const filtered = term ? state.all.filter(ep => ep.title.toLowerCase().includes(term)) : state.all;
@@ -140,12 +140,12 @@
     });
 
     // ==============================
-    // PWA service worker register (relative path)
+    // Service worker (PWA) — relative path for GitHub Pages
     // ==============================
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          const reg = await navigator.serviceWorker.register('service-worker.js'); // relative
+          const reg = await navigator.serviceWorker.register('service-worker.js');
           console.log('SW registered', reg);
         } catch (e) {
           console.warn('SW registration failed', e);
@@ -162,7 +162,7 @@
     document.head.appendChild(ytTag);
 
     window.onYouTubeIframeAPIReady = async function () {
-      // 1) Create player with direct playlist ID (works even without API key)
+      // 1) Load playlist directly (works even if Data API fails)
       player = new YT.Player('player', {
         height: '540',
         width: '960',
@@ -170,19 +170,19 @@
         events: { onReady: onReady, onStateChange: onStateChange }
       });
 
-      // 2) Try to fetch items to build searchable UI (optional)
-      if (API_KEY && API_KEY !== 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8') {
+      // 2) Try building the searchable list (requires valid API key)
+      if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
         try {
           state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
           if (state.all.length) {
             renderList(state.all);
             const ids = state.all.map(x => x.videoId);
-            player.loadPlaylist(ids); // lock order + playVideoAt(index) support
+            player.loadPlaylist(ids);  // lock order + playVideoAt(index)
             setNowPlaying(0);
           }
         } catch (err) {
           console.warn('Playlist fetch failed:', err);
-          showError('Data API fetch failed. Check your API key or referrer restrictions. Player will still work.');
+          showError('Data API fetch failed. Check your API key restrictions. Playback still works.');
         }
       } else {
         showError('Search/filter needs an API key. Playback works via direct playlist.');
@@ -245,4 +245,3 @@
   </script>
 </body>
 </html>
-

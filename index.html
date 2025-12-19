@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Tenali Rama – Playlist Browser - Version 2.7</title>
+  <title>Tenali Rama – Playlist Browser - Version 2.8</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <link rel="icon" type="" href="Tenali-Ramakrishna.png">
   <style>
@@ -642,6 +642,11 @@
       searchEl.addEventListener('input', () => applyFilters(true));
       searchEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
+          const term = searchEl.value.trim();
+          if (!term) {
+            // Empty search: do nothing at all
+            return;
+          }
           e.preventDefault();
           applyFilters(true);
           if (filteredEpisodes.length > 0) {
@@ -649,6 +654,7 @@
           }
         }
       });
+
 
       document.getElementById('clearBtn').addEventListener('click', () => {
         searchEl.value = '';
@@ -674,4 +680,5 @@
   </script>
 </body>
 </html>
+
 

@@ -8,7 +8,7 @@
     :root {
       --bg:#121212;
       --fg:#ffffff;
-      --accent:#ff0000;
+      --accent:#ff3b5c;
       --card:#1e1e1e;
     }
     * { box-sizing:border-box; }
@@ -17,13 +17,14 @@
       height:100vh;
       display:flex;
       flex-direction:column;
-      background:var(--bg);
+      background:radial-gradient(circle at top,#1f2a3a 0,#121212 55%,#050509 100%);
       color:var(--fg);
       font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
     }
     header {
       padding:10px 16px;
       border-bottom:1px solid #262626;
+      background:linear-gradient(90deg,#141824,#241733);
     }
     h1 { margin:0 0 4px; font-size:20px; }
     .top-row {
@@ -35,23 +36,27 @@
       flex:1;
       padding:8px 10px;
       font-size:14px;
-      border-radius:4px;
-      border:1px solid var(--accent);
-      background:var(--card);
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(15,15,20,.9);
       color:var(--fg);
       outline:none;
     }
+    #search:focus {
+      border-color:var(--accent);
+      box-shadow:0 0 0 1px rgba(255,59,92,.4);
+    }
     #clearBtn {
-      padding:0 10px;
+      padding:0 14px;
       font-size:13px;
-      border-radius:4px;
-      border:1px solid #555;
-      background:#2b2b2b;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:rgba(20,20,32,.95);
       color:var(--fg);
       cursor:pointer;
       white-space:nowrap;
     }
-    #clearBtn:hover { background:#3b3b3b; }
+    #clearBtn:hover { background:rgba(35,35,55,1); }
 
     .main {
       flex:1;
@@ -73,21 +78,24 @@
       flex-direction:column;
       min-width:260px;
       max-width:420px;
+      background:linear-gradient(180deg,rgba(15,15,25,.9),rgba(5,5,10,.98));
     }
 
-    /* Taller video: 65% of viewport height approx */
     #player {
       width:100%;
       height:65vh;
       max-height:720px;
       margin-bottom:8px;
+      border-radius:10px;
+      overflow:hidden;
+      box-shadow:0 18px 40px rgba(0,0,0,.65);
     }
 
     #err {
       display:none;
       margin-bottom:8px;
       padding:8px 10px;
-      border-radius:4px;
+      border-radius:6px;
       background:#3b1111;
       color:#ffcccc;
       font-size:13px;
@@ -114,11 +122,11 @@
       flex-shrink:0;
     }
     .nav-buttons button {
-      padding:4px 8px;
+      padding:4px 10px;
       font-size:12px;
-      border-radius:4px;
-      border:1px solid #555;
-      background:#2b2b2b;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.2);
+      background:rgba(20,20,32,.95);
       color:var(--fg);
       cursor:pointer;
     }
@@ -127,7 +135,7 @@
       cursor:default;
     }
     .nav-buttons button:hover:not(:disabled) {
-      background:#3b3b3b;
+      background:rgba(35,35,55,1);
     }
 
     .right-top {
@@ -151,9 +159,9 @@
     #rangeSelect {
       padding:4px 6px;
       font-size:13px;
-      border-radius:4px;
-      border:1px solid #555;
-      background:#1b1b1b;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.16);
+      background:#151521;
       color:var(--fg);
     }
 
@@ -172,25 +180,28 @@
       cursor:pointer;
       display:flex;
       padding:8px;
-      border-radius:6px;
-      background:var(--card);
-      border:2px solid transparent;
-      transition:border-color .15s,background .15s,transform .15s;
+      border-radius:10px;
+      background:linear-gradient(135deg,#191924,#111119);
+      border:1px solid rgba(255,255,255,.06);
+      box-shadow:0 6px 16px rgba(0,0,0,.6);
+      transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;
       align-items:flex-start;
     }
     .item:hover {
-      border-color:var(--accent);
+      border-color:rgba(255,255,255,.25);
       transform:translateY(-1px);
+      box-shadow:0 10px 24px rgba(0,0,0,.7);
     }
     .item.active {
       border-color:var(--accent);
-      background:#261111;
+      background:radial-gradient(circle at top left,#3a1a2f,#15151f);
+      box-shadow:0 0 0 1px rgba(255,59,92,.5),0 12px 30px rgba(0,0,0,.8);
     }
     .thumb {
       width:96px;
       height:54px;
       flex-shrink:0;
-      border-radius:4px;
+      border-radius:6px;
       object-fit:cover;
       margin-right:8px;
       background:#000;
@@ -233,7 +244,7 @@
 </head>
 <body>
   <header>
-    <h1>Tenali Rama – Playlist Browser - version 2.2</h1>
+    <h1>Tenali Rama – Playlist Browser - Version 2.3</h1>
     <div class="top-row">
       <input id="search" placeholder="Search by number or title..." />
       <button id="clearBtn">Clear</button>
@@ -371,7 +382,6 @@
       const searchTerm = document.getElementById('search').value.toLowerCase().trim();
       const rangeSel = document.getElementById('rangeSelect');
 
-      // If searching a specific number, make sure dropdown covers that episode
       if (adjustRangeForSearch && searchTerm && !isNaN(Number(searchTerm))) {
         const num = Number(searchTerm);
         if (num >= 1 && num <= allEpisodes.length) {
@@ -429,11 +439,9 @@
       const active = list.querySelector('.item.active');
       if (active) {
         const wrapper = document.getElementById('listWrapper');
-        const top = active.offsetTop;
-        const bottom = top + active.offsetHeight;
-        if (top < wrapper.scrollTop || bottom > wrapper.scrollTop + wrapper.clientHeight) {
-          wrapper.scrollTop = top - 20;
-        }
+        const target =
+          active.offsetTop - wrapper.clientHeight / 2 + active.offsetHeight / 2;
+        wrapper.scrollTop = Math.max(target, 0);
       }
     }
 
@@ -484,7 +492,6 @@
     }
 
     async function onPlayerReady() {
-      // Initialise toggle from storage
       const resumeToggle = document.getElementById('resumeToggle');
       resumeToggle.checked = localStorage.getItem(LS_RESUME_ON) === '1';
       resumeToggle.addEventListener('change', () => {
@@ -506,27 +513,34 @@
       if (savedIdx !== null) {
         const idx = Number(savedIdx);
         if (!Number.isNaN(idx) && idx >= 0 && idx < allEpisodes.length) {
-          // Ensure dropdown covers this episode
           const r = indexToRange(idx);
           document.getElementById('rangeSelect').value = String(r);
           localStorage.setItem(LS_LAST_RANGE, String(r));
           applyFilters(false);
           playEpisode(idx);
         } else {
-          playEpisode(0); // fallback to first
+          playEpisode(0);
         }
       } else {
-        // Default: auto‑play first episode
         playEpisode(0);
       }
 
-      document.getElementById('search').addEventListener('input', () => {
-        applyFilters(true); // allow search to shift range
+      const searchEl = document.getElementById('search');
+      searchEl.addEventListener('input', () => applyFilters(true));
+      searchEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (filteredEpisodes.length > 0) {
+            playEpisode(filteredEpisodes[0].index);
+          }
+        }
       });
+
       document.getElementById('clearBtn').addEventListener('click', () => {
-        document.getElementById('search').value = '';
+        searchEl.value = '';
         applyFilters(false);
       });
+
       document.getElementById('rangeSelect').addEventListener('change', (e) => {
         localStorage.setItem(LS_LAST_RANGE, e.target.value);
         applyFilters(false);

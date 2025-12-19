@@ -61,7 +61,7 @@
     // ==============================
     // CONFIG
     // ==============================
-    const API_KEY = 'YOUR_API_KEY'; // optional for enhanced list/search
+    const API_KEY = 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8'; // optional for enhanced list/search
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y'; // from your URL
 
     // ==============================
@@ -171,7 +171,7 @@
       });
 
       // 2) Try to fetch items to build searchable UI (optional)
-      if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
+      if (API_KEY && API_KEY !== 'AIzaSyBf59EBerbLGOSeL1R12VIJrNqAu89F8l8') {
         try {
           state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
           if (state.all.length) {
@@ -245,3 +245,4 @@
   </script>
 </body>
 </html>
+

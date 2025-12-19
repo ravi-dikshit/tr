@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -6,9 +5,9 @@
   <title>Series Browser + Player (PWA)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#0f1115" />
-  <!-- ✅ Proper PWA link tags (relative paths for GitHub Pages) -->
-  manifest.json
-  <link rel="icon" href="assets/icon-192.png" sizes="192x192fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
+
+  <!-- ✅ Correct manifest and icon links -->
+  <link rel="manifest" href="manifest.jsonssets/icon-192ot { --bg:#0f1115; --fg:#e7e9ee; --muted:#9aa0a6; --accent:#4f8cff; }
     * { box-sizing: border-box; }
     body { margin:0; background:var(--bg); color:var(--fg); font-family:system-ui,Segoe UI,Roboto,Arial; }
     header { padding:16px; display:flex; gap:12px; align-items:center; border-bottom:1px solid #222; }
@@ -59,18 +58,11 @@
     // ==============================
     // CONFIG
     // ==============================
-    // ⚠️ Replace with your regenerated/restricted key
-    const API_KEY = 'YOUR_API_KEY';
+    const API_KEY = 'YOUR_API_KEY'; // Replace with your restricted key
     const PLAYLIST_ID = 'PLbZxdQd9WcS0w2N8U1t6A5_GnEeWmRB4Y';
 
-    // ==============================
-    // STATE
-    // ==============================
     const state = { all: [], filtered: [], currentIndex: 0 };
 
-    // ==============================
-    // YouTube Data API fetch (optional; needs valid API key)
-    // ==============================
     async function fetchAllPlaylistItems(playlistId) {
       let pageToken = '';
       const out = [];
@@ -83,10 +75,7 @@
         url.searchParams.set('key', API_KEY);
 
         const res = await fetch(url);
-        if (!res.ok) {
-          const txt = await res.text().catch(()=> '');
-          throw new Error(`YouTube API error ${res.status}: ${txt}`);
-        }
+        if (!res.ok) throw new Error(`YouTube API error ${res.status}`);
         const json = await res.json();
 
         for (const item of json.items || []) {
@@ -95,9 +84,7 @@
           out.push({
             videoId: vid,
             title: item.snippet?.title ?? '(untitled)',
-            thumb: item.snippet?.thumbnails?.medium?.url
-              || item.snippet?.thumbnails?.default?.url
-              || ''
+            thumb: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || ''
           });
         }
         pageToken = json.nextPageToken || '';
@@ -106,9 +93,6 @@
       return out.map((x, i) => ({...x, index:i}));
     }
 
-    // ==============================
-    // Render list
-    // ==============================
     function renderList(items) {
       const list = document.getElementById('list');
       list.innerHTML = '';
@@ -132,37 +116,28 @@
       state.filtered = items;
     }
 
-    // Search / filter
     document.getElementById('q').addEventListener('input', () => {
       const term = document.getElementById('q').value.trim().toLowerCase();
       const filtered = term ? state.all.filter(ep => ep.title.toLowerCase().includes(term)) : state.all;
       renderList(filtered);
     });
 
-    // ==============================
-    // Service worker (PWA) — relative path for GitHub Pages
-    // ==============================
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', async () => {
         try {
-          const reg = await navigator.serviceWorker.register('service-worker.js');
-          console.log('SW registered', reg);
+          await navigator.serviceWorker.register('service-worker.js');
         } catch (e) {
           console.warn('SW registration failed', e);
         }
       });
     }
 
-    // ==============================
-    // YouTube IFrame Player
-    // ==============================
     let player;
     const ytTag = document.createElement('script');
     ytTag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(ytTag);
 
     window.onYouTubeIframeAPIReady = async function () {
-      // 1) Load playlist directly (works even if Data API fails)
       player = new YT.Player('player', {
         height: '540',
         width: '960',
@@ -170,19 +145,17 @@
         events: { onReady: onReady, onStateChange: onStateChange }
       });
 
-      // 2) Try building the searchable list (requires valid API key)
       if (API_KEY && API_KEY !== 'YOUR_API_KEY') {
         try {
           state.all = await fetchAllPlaylistItems(PLAYLIST_ID);
           if (state.all.length) {
             renderList(state.all);
             const ids = state.all.map(x => x.videoId);
-            player.loadPlaylist(ids);  // lock order + playVideoAt(index)
+            player.loadPlaylist(ids);
             setNowPlaying(0);
           }
         } catch (err) {
-          console.warn('Playlist fetch failed:', err);
-          showError('Data API fetch failed. Check your API key restrictions. Playback still works.');
+          showError('Data API fetch failed. Playback still works.');
         }
       } else {
         showError('Search/filter needs an API key. Playback works via direct playlist.');

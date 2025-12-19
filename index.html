@@ -139,17 +139,6 @@
       font-size:27px;
       line-height:1.2;
     }
-    .episode-main {
-      font-weight:700;
-      display:block;
-    }
-    .episode-date {
-      font-weight:300;
-      opacity:0.8;
-      font-size:0.85em;
-      margin-top:2px;
-      display:block;
-    }
     .nav-buttons {
       display:flex;
       gap:8px;
@@ -187,10 +176,11 @@
       font-size:14px;
     }
 
-    .right-bottom {
-      padding:10px 10px 20px;
+    .playlist-bottom {
+      padding:15px 10px 20px;
       border-top:1px solid #262626;
       margin-top:auto;
+      text-align:center;
     }
 
     .toggle-wrap {
@@ -256,8 +246,7 @@
       display:flex;
       flex-direction:column;
       gap:8px;
-      padding:0 5px; /* 5px margin-left/right on cards */
-      padding-right:4px;
+      padding:0 10px;
       padding-bottom:100px;
     }
     .item {
@@ -270,7 +259,7 @@
       box-shadow:0 6px 16px rgba(0,0,0,.6);
       transition:border-color .15s,background .15s,transform .15s,box-shadow .15s;
       align-items:flex-start;
-      margin:0 5px; /* 5px left/right margin */
+      margin:0 10px;
     }
     .item:hover {
       border-color:rgba(255,255,255,.25);
@@ -290,13 +279,11 @@
       object-fit:cover;
       margin-right:10px;
       background:#000;
-    }
-    .thumb.lazy {
-      opacity: 0.5;
-      transition: opacity 0.3s;
+      opacity:0.5;
+      transition:opacity 0.3s;
     }
     .thumb.loaded {
-      opacity: 1;
+      opacity:1;
     }
     .meta { flex:1; min-width:0; }
     .title {
@@ -347,19 +334,14 @@
       #player {
         height:40vh;
       }
-      .now-playing {
-        gap:12px;
-      }
-      .now-title {
-        font-size:24px;
-      }
+      .now-playing { gap:12px; }
+      .now-title { font-size:24px; }
       #list {
         padding:0 5px;
         padding-bottom:120px;
       }
-      .item {
-        margin:0 5px;
-      }
+      .item { margin:0; }
+      .playlist-bottom { padding:15px 5px 20px; }
     }
   </style>
 </head>
@@ -367,7 +349,7 @@
   <header>
     <img src="Tenali-Ramakrishna.png" alt="Tenali Rama" class="logo">
     <div class="title-block">
-      <h1>Tenali Rama – Version 3.4</h1>
+      <h1>Tenali Rama – Version 3.5</h1>
       <div class="top-row">
         <input id="search" placeholder="Search by number or title..." />
         <button id="clearBtn">Clear</button>
@@ -404,7 +386,7 @@
           <div id="loading">Loading episodes...</div>
         </div>
       </div>
-      <div class="right-bottom">
+      <div class="playlist-bottom">
         <select id="rangeSelectBottom"></select>
       </div>
     </aside>
@@ -427,35 +409,37 @@
     let player = null;
     let currentIndex = -1;
 
-    const PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+    const PLACEHOLDER =
+      'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
 
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     document.head.appendChild(tag);
 
     function setupLazyLoading() {
-      if ('IntersectionObserver' in window) {
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const img = entry.target;
+      if (!('IntersectionObserver' in window)) return;
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            if (img.dataset.src) {
               img.src = img.dataset.src;
-              img.classList.remove('lazy');
               img.classList.add('loaded');
-              observer.unobserve(img);
+              img.removeAttribute('data-src');
             }
-          });
-        }, { rootMargin: '200px 0px' });
-        
-        document.querySelectorAll('.thumb[data-src]').forEach(img => observer.observe(img));
-      }
+            observer.unobserve(img);
+          }
+        });
+      }, { root: document.getElementById('listWrapper'), rootMargin: '200px 0px' });
+
+      document.querySelectorAll('.thumb[data-src]').forEach(img => observer.observe(img));
     }
 
     function syncRangeDropdowns() {
       const topSelect = document.getElementById('rangeSelect');
       const bottomSelect = document.getElementById('rangeSelectBottom');
       if (topSelect && bottomSelect) {
-        bottomSelect.innerHTML = topSelect.innerHTML;
         bottomSelect.value = topSelect.value;
       }
     }
@@ -463,10 +447,10 @@
     function updateRangeSelection(newRangeIndex) {
       const topSelect = document.getElementById('rangeSelect');
       const bottomSelect = document.getElementById('rangeSelectBottom');
-      
+
       if (topSelect) topSelect.value = String(newRangeIndex);
       if (bottomSelect) bottomSelect.value = String(newRangeIndex);
-      
+
       localStorage.setItem(LS_LAST_RANGE, String(newRangeIndex));
       applyFilters(false);
     }
@@ -501,7 +485,7 @@
           if (json.error) throw json.error;
           items.push(...(json.items || []));
           token = json.nextPageToken || '';
-          loadingEl.textContent = 'Loaded ' + items.length + ' episodes...';
+          if (loadingEl) loadingEl.textContent = 'Loaded ' + items.length + ' episodes...';
         } catch (e) {
           showError('YouTube Data API error: ' + (e.message || e));
           console.error(e);
@@ -530,10 +514,10 @@
     function buildRangeOptions(total) {
       const topSel = document.getElementById('rangeSelect');
       const bottomSel = document.getElementById('rangeSelectBottom');
-      
+
       if (topSel) topSel.innerHTML = '';
       if (bottomSel) bottomSel.innerHTML = '';
-      
+
       const totalRanges = Math.ceil(total / RANGE_SIZE);
       for (let r = 0; r < totalRanges; r++) {
         const start = r * RANGE_SIZE + 1;
@@ -541,19 +525,18 @@
         const opt = document.createElement('option');
         opt.value = String(r);
         opt.textContent = start + '–' + end;
-        
+
         if (topSel) topSel.appendChild(opt.cloneNode(true));
-        if (bottomSel) bottomSel.appendChild(opt);
+        if (bottomSel) bottomSel.appendChild(opt.cloneNode(true));
       }
 
       const savedRange = localStorage.getItem(LS_LAST_RANGE);
-      if (savedRange !== null && Number(savedRange) < totalRanges) {
-        if (topSel) topSel.value = savedRange;
-        if (bottomSel) bottomSel.value = savedRange;
-      } else {
-        if (topSel) topSel.value = '0';
-        if (bottomSel) bottomSel.value = '0';
-      }
+      const initial = (savedRange !== null && Number(savedRange) < totalRanges)
+        ? savedRange
+        : '0';
+
+      if (topSel) topSel.value = initial;
+      if (bottomSel) bottomSel.value = initial;
     }
 
     function indexToRange(idx) {
@@ -563,6 +546,7 @@
     function applyFilters(adjustRangeForSearch = false) {
       const searchTerm = document.getElementById('search').value.toLowerCase().trim();
       const rangeSel = document.getElementById('rangeSelect');
+      if (!rangeSel) return;
 
       if (adjustRangeForSearch && searchTerm && !isNaN(Number(searchTerm))) {
         const num = Number(searchTerm);
@@ -595,6 +579,7 @@
 
     function renderList() {
       const list = document.getElementById('list');
+      if (!list) return;
       list.innerHTML = '';
 
       if (!filteredEpisodes.length) {
@@ -606,14 +591,12 @@
         const row = document.createElement('div');
         row.className = 'item';
         row.dataset.index = ep.index;
-        row.onclick = () => playEpisode(ep.index);
-        if (ep.index === currentIndex) row.classList.add('active');
 
         const img = document.createElement('img');
-        img.className = 'thumb lazy';
-        img.dataset.src = ep.thumb;
-        img.src = PLACEHOLDER;
+        img.className = 'thumb';
         img.alt = ep.title;
+        img.src = PLACEHOLDER;
+        if (ep.thumb) img.dataset.src = ep.thumb;
 
         const meta = document.createElement('div');
         meta.className = 'meta';
@@ -624,18 +607,24 @@
 
         row.appendChild(img);
         row.appendChild(meta);
+        row.onclick = () => playEpisode(ep.index);
+
+        if (ep.index === currentIndex) row.classList.add('active');
+
         list.appendChild(row);
       });
 
-      setupLazyLoading();
-      
       const active = list.querySelector('.item.active');
       if (active) {
         const wrapper = document.getElementById('listWrapper');
-        const target =
-          active.offsetTop - wrapper.clientHeight / 2 + active.offsetHeight / 2;
-        wrapper.scrollTop = Math.max(target, 0);
+        if (wrapper) {
+          const target =
+            active.offsetTop - wrapper.clientHeight / 2 + active.offsetHeight / 2;
+          wrapper.scrollTop = Math.max(target, 0);
+        }
       }
+
+      setupLazyLoading();
     }
 
     function updateNowPlaying() {
@@ -644,31 +633,20 @@
       const nextBtn = document.getElementById('nextBtn');
 
       if (currentIndex < 0 || !allEpisodes[currentIndex]) {
-        tEl.innerHTML = 'Select an episode…';
-        prevBtn.disabled = true;
-        nextBtn.disabled = true;
+        if (tEl) tEl.textContent = 'Select an episode…';
+        if (prevBtn) prevBtn.disabled = true;
+        if (nextBtn) nextBtn.disabled = true;
         return;
       }
 
       const ep = allEpisodes[currentIndex];
-      const fullTitle = ep.title;
-      const epNum = `Ep ${ep.index + 1}: `;
-      
-      const mainTitle = fullTitle.split('-')[0].trim();
-      const dateMatch = fullTitle.match(/(\d{1,2}(?:st|nd|rd|th)\s+(?:January|February|March|April|May|June|July|August|September|October|November|December),\s+\d{4})/i);
-      const date = dateMatch ? dateMatch[0] : '';
-      
-      tEl.innerHTML = `
-        <span class="episode-main">${epNum}${mainTitle}</span>
-        ${date ? `<span class="episode-date">${date}</span>` : ''}
-      `;
-      
-      prevBtn.disabled = (currentIndex <= 0);
-      nextBtn.disabled = (currentIndex >= allEpisodes.length - 1);
+      if (tEl) tEl.textContent = `Ep ${ep.index + 1}: ${ep.title}`;
+      if (prevBtn) prevBtn.disabled = (currentIndex <= 0);
+      if (nextBtn) nextBtn.disabled = (currentIndex >= allEpisodes.length - 1);
     }
 
     function saveLastIndexIfNeeded() {
-      const resumeOn = document.getElementById('resumeToggle').checked;
+      const resumeOn = document.getElementById('resumeToggle')?.checked;
       if (resumeOn && currentIndex >= 0) {
         localStorage.setItem(LS_LAST_INDEX, String(currentIndex));
       }
@@ -691,6 +669,7 @@
 
     function showError(msg) {
       const el = document.getElementById('err');
+      if (!el) return;
       el.textContent = msg;
       el.style.display = 'block';
     }
@@ -707,24 +686,26 @@
     async function onPlayerReady() {
       const resumeToggle = document.getElementById('resumeToggle');
       const storedResume = localStorage.getItem(LS_RESUME_ON);
-      if (storedResume === null) {
-        resumeToggle.checked = true;
-      } else {
-        resumeToggle.checked = storedResume === '1';
-      }
-      resumeToggle.addEventListener('change', () => {
-        localStorage.setItem(LS_RESUME_ON, resumeToggle.checked ? '1' : '0');
-        if (resumeToggle.checked && currentIndex >= 0) {
-          localStorage.setItem(LS_LAST_INDEX, String(currentIndex));
+      if (resumeToggle) {
+        if (storedResume === null) {
+          resumeToggle.checked = true;
+        } else {
+          resumeToggle.checked = storedResume === '1';
         }
-      });
+        resumeToggle.addEventListener('change', () => {
+          localStorage.setItem(LS_RESUME_ON, resumeToggle.checked ? '1' : '0');
+          if (resumeToggle.checked && currentIndex >= 0) {
+            localStorage.setItem(LS_LAST_INDEX, String(currentIndex));
+          }
+        });
+      }
 
       allEpisodes = await fetchAllPlaylistItems();
       if (!allEpisodes.length) return;
 
       buildRangeOptions(allEpisodes.length);
 
-      const resumeOn = resumeToggle.checked;
+      const resumeOn = resumeToggle ? resumeToggle.checked : true;
       const savedIdx = resumeOn ? localStorage.getItem(LS_LAST_INDEX) : null;
       let startIdxToPlay = 0;
 
@@ -738,21 +719,25 @@
       const win = initialWindowIndices(startIdxToPlay, allEpisodes.length);
       const rangeSel = document.getElementById('rangeSelect');
       const desiredRange = indexToRange(startIdxToPlay);
-      updateRangeSelection(desiredRange);
+      if (rangeSel) rangeSel.value = String(desiredRange);
+      localStorage.setItem(LS_LAST_RANGE, String(desiredRange));
+      syncRangeDropdowns();
 
       filteredEpisodes = allEpisodes.slice(win.start, win.end);
       renderList();
 
       (async () => {
-        let chunkStart = Math.max(win.end, INITIAL_BATCH);
-        while (chunkStart < allEpisodes.length) {
-          const chunkEnd = Math.min(chunkStart + CHUNK_SIZE, allEpisodes.length);
-          const rangeIdx = Number(rangeSel.value || 0);
+        const remaining = [];
+        for (let i = 0; i < allEpisodes.length; i++) {
+          if (i < win.start || i >= win.end) remaining.push(allEpisodes[i]);
+        }
+        while (remaining.length) {
+          remaining.splice(0, CHUNK_SIZE);
+          const rangeIdx = Number(document.getElementById('rangeSelect')?.value || 0);
           const s = rangeIdx * RANGE_SIZE;
           const e = s + RANGE_SIZE;
           filteredEpisodes = allEpisodes.filter(ep => ep.index >= s && ep.index < e);
           renderList();
-          chunkStart = chunkEnd;
           await new Promise(r => setTimeout(r, 50));
         }
       })();
@@ -760,48 +745,38 @@
       playEpisode(startIdxToPlay);
 
       const searchEl = document.getElementById('search');
-      searchEl.addEventListener('input', () => applyFilters(true));
-      searchEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          const term = searchEl.value.trim();
-          if (!term) return;
-          e.preventDefault();
-          applyFilters(true);
-        }
-      });
+      if (searchEl) {
+        searchEl.addEventListener('input', () => applyFilters(true));
+        searchEl.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            const term = searchEl.value.trim();
+            if (!term) return;
+            e.preventDefault();
+            applyFilters(true);
+            if (filteredEpisodes.length > 0) {
+              playEpisode(filteredEpisodes[0].index);
+            }
+          }
+        });
+      }
 
-      document.getElementById('clearBtn').addEventListener('click', () => {
-        searchEl.value = '';
+      document.getElementById('clearBtn')?.addEventListener('click', () => {
+        if (searchEl) searchEl.value = '';
         applyFilters(false);
       });
 
-      // Top range dropdown
-      document.getElementById('rangeSelect').addEventListener('change', (e) => {
-        updateRangeSelection(Number(e.target.value));
+      document.getElementById('rangeSelect')?.addEventListener('change', (e) => {
+        updateRangeSelection(e.target.value);
+      });
+      document.getElementById('rangeSelectBottom')?.addEventListener('change', (e) => {
+        updateRangeSelection(e.target.value);
       });
 
-      // Bottom range dropdown
-      document.getElementById('rangeSelectBottom').addEventListener('change', (e) => {
-        updateRangeSelection(Number(e.target.value));
-      });
-
-      document.getElementById('prevBtn').addEventListener('click', () => {
+      document.getElementById('prevBtn')?.addEventListener('click', () => {
         if (currentIndex > 0) playEpisode(currentIndex - 1);
       });
-      
-      document.getElementById('nextBtn').addEventListener('click', () => {
-        if (currentIndex < allEpisodes.length - 1) {
-          const nextIndex = currentIndex + 1;
-          const currentRangeEnd = Number(document.getElementById('rangeSelect').value) * RANGE_SIZE + RANGE_SIZE - 1;
-          
-          // Auto-advance range if next episode is in next range
-          if (nextIndex > currentRangeEnd && nextIndex < allEpisodes.length) {
-            const nextRange = indexToRange(nextIndex);
-            updateRangeSelection(nextRange);
-          }
-          
-          playEpisode(nextIndex);
-        }
+      document.getElementById('nextBtn')?.addEventListener('click', () => {
+        if (currentIndex < allEpisodes.length - 1) playEpisode(currentIndex + 1);
       });
     }
 
